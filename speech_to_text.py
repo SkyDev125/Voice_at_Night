@@ -1,4 +1,5 @@
 #! python3.7
+import tts_config as config
 
 import argparse
 import os
@@ -6,16 +7,29 @@ import numpy as np
 import speech_recognition as sr
 import whisper
 import torch
-import text_to_speech as tts
+import pyttsx3
+import sounddevice as sd
 
-from datetime import datetime, timedelta
+
 from queue import Queue
 from time import sleep
 from sys import platform
 
+def get_audio_input_device():
+    # This function will now list output devices and return the name of the first one
+    devices = sd.query_devices()
+    output_devices = [d for d in devices if d['max_output_channels'] > 0]
+    if output_devices:
+        # Find the device ID for the given device name
+        print("Device: {}".format(output_devices[8]['name']))
+        return output_devices[8]['index']
+    else:
+        raise ValueError("No output devices found")
 
-def main():
-    # Parse command line arguments.
+def parse_arguments():
+    """
+    Parse command line arguments.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default="small", help="Model to use",
                         choices=["tiny", "base", "small", "medium", "large"])
@@ -27,11 +41,13 @@ def main():
                         help="How real time the recording is in seconds.", type=float)
     parser.add_argument("--phrase_timeout", default=3,
                         help="How much empty space between recordings before we "
-                             "consider it a new line in the transcription.", type=float)
+                                "consider it a new line in the transcription.", type=float)
     args = parser.parse_args()
+    return args
 
-    # The last time a recording was retrieved from the queue.
-    phrase_time = None
+def main():
+    args = parse_arguments()
+
     # Thread safe Queue for passing data from the threaded recording callback.
     data_queue = Queue()
     # We use SpeechRecognizer to record our audio because it has a nice feature where it can detect when speech ends.
@@ -41,8 +57,6 @@ def main():
     recorder.dynamic_energy_threshold = False
     source = sr.Microphone(sample_rate=16000)
 
-    selected_device = tts.get_audio_input_device()
-
     # Load / Download model
     model = args.model
     if args.model != "large" and not args.non_english:
@@ -50,9 +64,6 @@ def main():
     audio_model = whisper.load_model(model)
 
     record_timeout = args.record_timeout
-    phrase_timeout = args.phrase_timeout
-
-    transcription = ['']
 
     with source:
         recorder.adjust_for_ambient_noise(source)
@@ -73,18 +84,17 @@ def main():
     # Cue the user that we're ready to go.
     print("Model loaded.\n")
 
+    selected_device = get_audio_input_device()
+    engine = pyttsx3.init()
+    engine.setProperty('voice', config.voice_id)
+    engine.setProperty('rate', config.speech_rate)
+    engine.setProperty('volume', config.volume)
+    engine.setProperty('pitch', config.pitch)
+
     while True:
         try:
-            now = datetime.utcnow()
             # Pull raw recorded audio from the queue.
             if not data_queue.empty():
-                phrase_complete = False
-                # If enough time has passed between recordings, consider the phrase complete.
-                # Clear the current working audio buffer to start over with the new data.
-                if phrase_time and now - phrase_time > timedelta(seconds=phrase_timeout):
-                    phrase_complete = True
-                # This is the last time we received new audio data from the queue.
-                phrase_time = now
                 
                 # Combine audio data from queue
                 audio_data = b''.join(data_queue.queue)
@@ -99,19 +109,14 @@ def main():
                 result = audio_model.transcribe(audio_np, fp16=torch.cuda.is_available())
                 text = result['text'].strip()
 
-                tts.text_to_speech(text)
-                tts.play('temp.mp3', selected_device)
+                engine.say(text)
+                engine.runAndWait()
 
             else:
                 # Infinite loops are bad for processors, must sleep.
                 sleep(0.25)
         except KeyboardInterrupt:
             break
-
-    print("\n\nTranscription:")
-    for line in transcription:
-        print(line)
-
 
 if __name__ == "__main__":
     main()
