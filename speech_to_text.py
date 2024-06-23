@@ -103,7 +103,6 @@ def init_tts_engine():
     engine.setProperty("voice", config.voice_id)
     engine.setProperty("rate", config.speech_rate)
     engine.setProperty("volume", config.volume)
-    engine.setProperty("pitch", config.pitch)
     return engine
 
 
