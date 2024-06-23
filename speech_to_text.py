@@ -11,6 +11,12 @@ from queue import Queue
 from time import sleep
 
 
+def get_tts_voices():
+    engine = pyttsx3.init()
+    voices = engine.getProperty("voices")
+    return {voice.name: voice.id for voice in voices}
+
+
 def main():
 
     # Thread safe Queue for passing data from the threaded recording callback.
@@ -73,7 +79,6 @@ def main():
                     audio_np, fp16=torch.cuda.is_available()
                 )
                 text = result["text"].strip()
-                
 
                 print(text)
                 play_tts(engine, text)
