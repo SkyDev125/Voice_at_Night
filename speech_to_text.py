@@ -1,4 +1,3 @@
-import tts_config as config
 import numpy as np
 import speech_recognition as sr
 import whisper
@@ -17,19 +16,27 @@ def get_tts_voices():
     return {voice.name: voice.id for voice in voices}
 
 
-def main():
-
+def stt_main(
+    voice_id,
+    speech_rate,
+    volume,
+    model,
+    english,
+    energy_threshold,
+    record_timeout,
+    output_device,
+):
     # Thread safe Queue for passing data from the threaded recording callback.
     data_queue = Queue()
     # We use SpeechRecognizer to record our audio because it has a nice feature where it can detect when speech ends.
     recorder = sr.Recognizer()
-    recorder.energy_threshold = config.energy_threshold
+    recorder.energy_threshold = energy_threshold
     # Definitely do this, dynamic energy compensation lowers the energy threshold dramatically to a point where the SpeechRecognizer never stops recording.
     recorder.dynamic_energy_threshold = False
     source = sr.Microphone(sample_rate=16000)
 
     # Load / Download model
-    audio_model = load_stt_model(config)
+    audio_model = load_stt_model(model, english)
 
     with source:
         recorder.adjust_for_ambient_noise(source)
@@ -46,10 +53,10 @@ def main():
     # Create a background thread that will pass us raw audio bytes.
     # We could do this manually but SpeechRecognizer provides a nice helper.
     recorder.listen_in_background(
-        source, record_callback, phrase_time_limit=config.record_timeout
+        source, record_callback, phrase_time_limit=record_timeout
     )
 
-    engine = init_tts_engine()
+    engine = init_tts_engine(output_device, voice_id, speech_rate, volume)
 
     # Cue the user that we're ready to go.
     print("Model loaded.")
@@ -90,30 +97,28 @@ def main():
             break
 
 
-def get_input_devices():
-    # This function will now list output devices and return the name of the first one
+def get_output_devices():
     devices = sd.query_devices()
-    output_devices = [d for d in devices if d["max_output_channels"] > 0]
+    output_devices = {
+        d["name"]: d["index"] for d in devices if d["max_output_channels"] > 0
+    }
     if output_devices:
-        # Find the device ID for the given device name
-        print("Device: {}".format(output_devices[8]["name"]))
-        return output_devices[8]["index"]
+        return output_devices
     else:
         raise ValueError("No output devices found")
 
 
-def init_tts_engine():
-    sd.default.device = get_input_devices()
+def init_tts_engine(output_device, voice_id, speech_rate, volume):
+    sd.default.device = output_device
     engine = pyttsx3.init()
-    engine.setProperty("voice", config.voice_id)
-    engine.setProperty("rate", config.speech_rate)
-    engine.setProperty("volume", config.volume)
+    engine.setProperty("voice", voice_id)
+    engine.setProperty("rate", speech_rate)
+    engine.setProperty("volume", volume)
     return engine
 
 
-def load_stt_model(config: config):
-    model = config.model
-    if config.model != "large" and config.english:
+def load_stt_model(model, english):
+    if model != "large" and english:
         model = model + ".en"
     audio_model = whisper.load_model(model)
     return audio_model
@@ -128,4 +133,4 @@ def play_tts(engine, text):
 
 
 if __name__ == "__main__":
-    main()
+    stt_main()

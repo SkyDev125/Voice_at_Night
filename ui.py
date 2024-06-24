@@ -5,8 +5,10 @@ from tkinter import messagebox
 import pystray
 from PIL import Image
 from pystray import MenuItem as item
-import tts_config as config
+import inspect
+import config
 import speech_to_text as stt
+import threading
 
 # ==================================================
 # Global Constants
@@ -21,16 +23,70 @@ whisper_model = {
 }
 
 # ==================================================
-# General functions
+# Helper Functions
 # ==================================================
-
-
-def run():
-    return
 
 
 def find_key(d, value):
     return next((k for k, v in d.items() if v == value), None)
+
+
+# ==================================================
+# STT Thread Management
+# ==================================================
+pause_stt = threading.Event()
+stop_stt = False
+
+
+def start(
+    voices,
+    voice_var,
+    speech_rate_var,
+    volume_var,
+    model_var,
+    english_var,
+    energy_threshold_var,
+    record_timeout_var,
+    output_devices,
+    output_device_var,
+):
+    def run_stt():
+        while not stop_stt:
+            if pause_stt.is_set():
+                # Perform STT operations
+                stt.stt_main(
+                    voices[voice_var.get()],
+                    speech_rate_var.get(),
+                    volume_var.get(),
+                    whisper_model[model_var.get()],
+                    english_var.get(),
+                    energy_threshold_var.get(),
+                    record_timeout_var.get(),
+                    output_devices[output_device_var.get()],
+                )
+            else:
+                # If paused, wait until unpause
+                pause_stt.wait()
+
+    global stop_stt
+    stop_stt = False
+    pause_stt.set()
+    stt_thread = threading.Thread(target=run_stt)
+    stt_thread.start()
+
+
+def pause_thread():
+    pause_stt.clear()
+
+
+def pause():
+    pause_stt.set()
+
+
+def stop():
+    global stop_stt
+    stop_stt = True
+    pause()
 
 
 # ==================================================
@@ -47,7 +103,8 @@ def save_as_default(
     english_var,
     energy_threshold_var,
     record_timeout_var,
-    phrase_timeout_var,
+    output_devices,
+    output_device_var,
 ):
     # Show a warning before saving defaults
     response = messagebox.askyesno(
@@ -61,14 +118,17 @@ def save_as_default(
         update_config_value("english", english_var.get())
         update_config_value("energy_threshold", energy_threshold_var.get())
         update_config_value("record_timeout", record_timeout_var.get())
-        update_config_value("phrase_timeout", phrase_timeout_var.get())
+        update_config_value(
+            "output_device_id", output_devices[output_device_var.get()]
+        )
         messagebox.showinfo(
             "Save Defaults", "Defaults have been saved successfully."
         )
 
 
 def update_config_value(target_id, new_value):
-    with open("tts_config.py", "r+") as file:
+    config_file_path = inspect.getfile(config)
+    with open(config_file_path, "r+") as file:
         content = file.read()
         parsed = ast.parse(content)
         for node in ast.walk(parsed):
@@ -121,11 +181,14 @@ def create_UI():
     root.title("TTS and STT Configuration Panel")
 
     # Prevent the window from being resizable
-    root.resizable(False, False)
+    # root.resizable(False, False)
 
     # Add padding around the components inside the window
     root["padx"] = 10
     root["pady"] = 10
+
+    # Configure column 1 to expand
+    root.grid_columnconfigure(1, weight=1)
 
     # Voice selection
     voices = stt.get_tts_voices()
@@ -136,7 +199,7 @@ def create_UI():
         root, textvariable=voice_var, state="readonly"
     )
     voice_dropdown["values"] = list(voices.keys())
-    voice_dropdown.grid(column=1, row=0)
+    voice_dropdown.grid(column=1, row=0, sticky="ew")
 
     # Speech rate
     speech_rate_label = ttk.Label(root, text="Speech Rate:")
@@ -145,7 +208,7 @@ def create_UI():
     speech_rate_slider = ttk.Scale(
         root, from_=50, to_=300, variable=speech_rate_var, orient=tk.HORIZONTAL
     )
-    speech_rate_slider.grid(column=1, row=1, sticky=tk.EW)
+    speech_rate_slider.grid(column=1, row=1, sticky="ew")
 
     # Volume
     volume_label = ttk.Label(root, text="Volume:")
@@ -154,7 +217,7 @@ def create_UI():
     volume_slider = ttk.Scale(
         root, from_=0.0, to_=1.0, variable=volume_var, orient=tk.HORIZONTAL
     )
-    volume_slider.grid(column=1, row=2, sticky=tk.EW)
+    volume_slider.grid(column=1, row=2, sticky="ew")
 
     # STT Model
     model_label = ttk.Label(root, text="STT Model:")
@@ -164,40 +227,61 @@ def create_UI():
         root, textvariable=model_var, state="readonly"
     )
     model_combobox["values"] = list(whisper_model.keys())
-    model_combobox.grid(column=1, row=3, sticky=tk.EW)
+    model_combobox.grid(column=1, row=3, sticky="ew")
 
     # English
     english_var = tk.BooleanVar(value=True)
     english_check = ttk.Checkbutton(
         root, text="Use English Model", variable=english_var
     )
-    english_check.grid(column=0, row=4, columnspan=2)
+    english_check.grid(column=0, row=4, columnspan=2, sticky="ew")
 
     # Energy Threshold
     energy_threshold_label = ttk.Label(root, text="Energy Threshold:")
     energy_threshold_label.grid(column=0, row=5, sticky=tk.W)
     energy_threshold_var = tk.IntVar(value=config.energy_threshold)
     energy_threshold_entry = ttk.Entry(root, textvariable=energy_threshold_var)
-    energy_threshold_entry.grid(column=1, row=5, sticky=tk.EW)
+    energy_threshold_entry.grid(column=1, row=5, sticky="ew")
 
     # Record Timeout
     record_timeout_label = ttk.Label(root, text="Record Timeout (s):")
     record_timeout_label.grid(column=0, row=6, sticky=tk.W)
     record_timeout_var = tk.IntVar(value=config.record_timeout)
     record_timeout_entry = ttk.Entry(root, textvariable=record_timeout_var)
-    record_timeout_entry.grid(column=1, row=6, sticky=tk.EW)
+    record_timeout_entry.grid(column=1, row=6, sticky="ew")
 
-    # Phrase Timeout
-    phrase_timeout_label = ttk.Label(root, text="Phrase Timeout (s):")
-    phrase_timeout_label.grid(column=0, row=7, sticky=tk.W)
-    phrase_timeout_var = tk.IntVar(value=config.phrase_timeout)
-    phrase_timeout_entry = ttk.Entry(root, textvariable=phrase_timeout_var)
-    phrase_timeout_entry.grid(column=1, row=7, sticky=tk.EW)
+    # Output Device Selection
+    output_devices_label = ttk.Label(root, text="Select Output Device:")
+    output_devices_label.grid(column=0, row=8, sticky=tk.W)
+    output_devices = stt.get_output_devices()
+    output_device_var = tk.StringVar(
+        value=find_key(output_devices, config.output_device_id)
+    )
+    output_device_combobox = ttk.Combobox(
+        root, textvariable=output_device_var, state="readonly"
+    )
+    output_device_combobox["values"] = list(output_devices.keys())
+    output_device_combobox.grid(column=1, row=8, sticky="ew")
 
     # Save Button
-    save_button = ttk.Button(root, text="Run", command=run)
+    start_button = ttk.Button(
+        root,
+        text="Start",
+        command=lambda: start(
+            voices,
+            voice_var,
+            speech_rate_var,
+            volume_var,
+            model_var,
+            english_var,
+            energy_threshold_var,
+            record_timeout_var,
+            output_devices,
+            output_device_var,
+        ),
+    )
     # Adjusted to be in the center-left position with padding for spacing
-    save_button.grid(column=0, row=8, padx=(10, 5), pady=10)
+    start_button.grid(column=0, row=9, padx=(10, 5), pady=10)
 
     # New Button for Saving Defaults
     save_defaults_button = ttk.Button(
@@ -212,12 +296,12 @@ def create_UI():
             english_var,
             energy_threshold_var,
             record_timeout_var,
-            phrase_timeout_var,
+            output_devices,
+            output_device_var,
         ),
     )
-
     # Adjusted to be in the center-right position with padding for spacing
-    save_defaults_button.grid(column=1, row=8, padx=(5, 10), pady=10)
+    save_defaults_button.grid(column=1, row=9, padx=(5, 10), pady=10)
 
     # Modify the application to minimize to system tray on close
     root.protocol("WM_DELETE_WINDOW", lambda: hide_window(root))
