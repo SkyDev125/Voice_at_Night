@@ -9,18 +9,8 @@ import inspect
 import config
 import speech_to_text as stt
 import threading
-
-# ==================================================
-# Global Constants
-# ==================================================
-
-whisper_model = {
-    "Tiny": "tiny",
-    "Base": "base",
-    "Small": "small",
-    "Medium": "medium",
-    "Large": "large",
-}
+import globals
+import sv_ttk
 
 # ==================================================
 # Helper Functions
@@ -34,8 +24,6 @@ def find_key(d, value):
 # ==================================================
 # STT Thread Management
 # ==================================================
-pause_stt = threading.Event()
-stop_stt = False
 
 
 def start(
@@ -50,43 +38,25 @@ def start(
     output_devices,
     output_device_var,
 ):
-    def run_stt():
-        while not stop_stt:
-            if pause_stt.is_set():
-                # Perform STT operations
-                stt.stt_main(
-                    voices[voice_var.get()],
-                    speech_rate_var.get(),
-                    volume_var.get(),
-                    whisper_model[model_var.get()],
-                    english_var.get(),
-                    energy_threshold_var.get(),
-                    record_timeout_var.get(),
-                    output_devices[output_device_var.get()],
-                )
-            else:
-                # If paused, wait until unpause
-                pause_stt.wait()
+    def stt_main_thread():
+        stt.stt_main(
+            voices[voice_var.get()],
+            speech_rate_var.get(),
+            volume_var.get(),
+            globals.whisper_model[model_var.get()],
+            english_var.get(),
+            energy_threshold_var.get(),
+            record_timeout_var.get(),
+            output_devices[output_device_var.get()],
+        )
 
-    global stop_stt
-    stop_stt = False
-    pause_stt.set()
-    stt_thread = threading.Thread(target=run_stt)
-    stt_thread.start()
-
-
-def pause_thread():
-    pause_stt.clear()
-
-
-def pause():
-    pause_stt.set()
+    globals.stt_running = True
+    thread = threading.Thread(target=stt_main_thread)
+    thread.start()
 
 
 def stop():
-    global stop_stt
-    stop_stt = True
-    pause()
+    globals.stt_running = False
 
 
 # ==================================================
@@ -114,7 +84,7 @@ def save_as_default(
         update_config_value("voice_id", voices[voice_var.get()])
         update_config_value("speech_rate", speech_rate_var.get())
         update_config_value("volume", volume_var.get())
-        update_config_value("model", whisper_model[model_var.get()])
+        update_config_value("model", globals.whisper_model[model_var.get()])
         update_config_value("english", english_var.get())
         update_config_value("energy_threshold", energy_threshold_var.get())
         update_config_value("record_timeout", record_timeout_var.get())
@@ -179,6 +149,8 @@ def create_UI():
     # Create the main window
     root = tk.Tk()
     root.title("TTS and STT Configuration Panel")
+    root.iconbitmap("resources\images\icon.png")
+    sv_ttk.set_theme("dark")
 
     # Prevent the window from being resizable
     # root.resizable(False, False)
@@ -222,11 +194,13 @@ def create_UI():
     # STT Model
     model_label = ttk.Label(root, text="STT Model:")
     model_label.grid(column=0, row=3, sticky=tk.W)
-    model_var = tk.StringVar(value=find_key(whisper_model, config.model))
+    model_var = tk.StringVar(
+        value=find_key(globals.whisper_model, config.model)
+    )
     model_combobox = ttk.Combobox(
         root, textvariable=model_var, state="readonly"
     )
-    model_combobox["values"] = list(whisper_model.keys())
+    model_combobox["values"] = list(globals.whisper_model.keys())
     model_combobox.grid(column=1, row=3, sticky="ew")
 
     # English
@@ -263,25 +237,38 @@ def create_UI():
     output_device_combobox["values"] = list(output_devices.keys())
     output_device_combobox.grid(column=1, row=8, sticky="ew")
 
-    # Save Button
-    start_button = ttk.Button(
+    def toggle_stt():
+        if not globals.stt_running:
+            start(
+                voices,
+                voice_var,
+                speech_rate_var,
+                volume_var,
+                model_var,
+                english_var,
+                energy_threshold_var,
+                record_timeout_var,
+                output_devices,
+                output_device_var,
+            )
+            status_button.config(text="Stop", style="On.TButton")
+        else:
+            stop()
+            status_button.config(text="Start", style="TButton")
+
+    # Create styles for the button
+    style = ttk.Style()
+    style.configure("On.TButton", background="red")
+
+    # Status Button
+    status_button = ttk.Button(
         root,
         text="Start",
-        command=lambda: start(
-            voices,
-            voice_var,
-            speech_rate_var,
-            volume_var,
-            model_var,
-            english_var,
-            energy_threshold_var,
-            record_timeout_var,
-            output_devices,
-            output_device_var,
-        ),
+        command=toggle_stt,  # Changed to toggle_stt
+        style="TButton",
     )
     # Adjusted to be in the center-left position with padding for spacing
-    start_button.grid(column=0, row=9, padx=(10, 5), pady=10)
+    status_button.grid(column=0, row=9, padx=(10, 5), pady=10)
 
     # New Button for Saving Defaults
     save_defaults_button = ttk.Button(

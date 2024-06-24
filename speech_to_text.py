@@ -4,6 +4,7 @@ import whisper
 import torch
 import pyttsx3
 import sounddevice as sd
+import globals
 
 from scipy.io.wavfile import read
 from queue import Queue
@@ -52,7 +53,7 @@ def stt_main(
 
     # Create a background thread that will pass us raw audio bytes.
     # We could do this manually but SpeechRecognizer provides a nice helper.
-    recorder.listen_in_background(
+    stop_listening = recorder.listen_in_background(
         source, record_callback, phrase_time_limit=record_timeout
     )
 
@@ -62,7 +63,7 @@ def stt_main(
     print("Model loaded.")
     print("Listening...")
 
-    while True:
+    while globals.stt_running:
         try:
             # Pull raw recorded audio from the queue.
             if not data_queue.empty():
@@ -93,8 +94,12 @@ def stt_main(
             else:
                 # Infinite loops are bad for processors, must sleep.
                 sleep(0.25)
-        except KeyboardInterrupt:
+        except Exception as e:
+            print(f"Error: {e}")
             break
+
+    print("Stopped STT-TTS")
+    stop_listening()
 
 
 def get_output_devices():
