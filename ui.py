@@ -51,13 +51,14 @@ def start(
         )
 
     globals.stt_running = True
-    thread = threading.Thread(target=stt_main_thread)
-    thread.start()
+    globals.stt_thread = threading.Thread(target=stt_main_thread)
+    globals.stt_thread.start()
 
 
 def stop():
     globals.stt_running = False
-
+    if globals.stt_thread:
+        globals.stt_thread.join()
 
 # ==================================================
 # Default config update functions
@@ -124,20 +125,34 @@ def show_window(icon, root):
     root.after(100, lambda: root.focus_force())
 
 
+from tkinter import messagebox  # Import messagebox for the confirmation dialog
+
+
 def hide_window(root):
-    root.withdraw()
-    image = Image.open("resources\images\icon.png")
-    menu = (
-        item("Quit", lambda: quit_app(icon, root)),
-        item("Show", lambda: show_window(icon, root)),
-    )
-    icon = pystray.Icon("name", image, "Title", menu)
-    icon.run()
+    # Ask the user if they want to minimize to tray
+    if messagebox.askyesno(
+        "Minimize to Tray",
+        "Do you want to minimize the application to the system tray?",
+    ):
+        root.withdraw()
+        image = Image.open(
+            "resources\\images\\icon.ico"
+        )  # Corrected the path for consistency
+        menu = (
+            item("Quit", lambda: quit_app(icon, root)),
+            item("Show", lambda: show_window(icon, root)),
+        )
+        icon = pystray.Icon("name", image, "Title", menu)
+        icon.run()
+    else:
+        quit_app(None, root)
 
 
 def quit_app(icon, root):
-    icon.stop()
+    stop()
     root.destroy()
+    if icon:
+        icon.stop()
 
 
 # ==================================================
@@ -149,7 +164,7 @@ def create_UI():
     # Create the main window
     root = tk.Tk()
     root.title("TTS and STT Configuration Panel")
-    root.iconbitmap("resources\images\icon.png")
+    root.iconbitmap("resources\images\icon.ico")
     sv_ttk.set_theme("dark")
 
     # Prevent the window from being resizable

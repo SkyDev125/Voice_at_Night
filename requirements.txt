@@ -1,11 +1,11 @@
-pydub==0.25.1
-pygame==2.4.0
-pyttsx3==2.90
-gTTS==2.3.2
-setuptools
-pyaudio
+numpy==1.26.4
+PyAudio==0.2.14
 SpeechRecognition
---extra-index-url https://download.pytorch.org/whl/cu116
-torch
-numpy
-git+https://github.com/openai/whisper.git
+whisper==1.1.10
+torch==2.1.2+cu118
+pyttsx3==2.90
+sounddevice==0.4.7
+scipy==1.13.0
+pillow==10.2.0
+pystray==0.19.5
+sv_ttk

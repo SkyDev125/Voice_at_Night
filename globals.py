@@ -11,3 +11,4 @@ whisper_model = {
 }
 
 stt_running = False
+stt_thread = None

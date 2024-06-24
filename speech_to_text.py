@@ -130,9 +130,9 @@ def load_stt_model(model, english):
 
 
 def play_tts(engine, text):
-    engine.save_to_file(text, "speech.wav")
+    engine.save_to_file(text, "resources\\temp\\speech.wav")
     engine.runAndWait()
-    sample_rate, data = read("speech.wav")
+    sample_rate, data = read("resources\\temp\\speech.wav")
     sd.play(data, sample_rate)
     sd.wait()
 
