@@ -1,6 +1,6 @@
 numpy==1.26.4
 PyAudio==0.2.14
-SpeechRecognition
+SpeechRecognition==3.10.4
 whisper==1.1.10
 torch==2.1.2+cu118
 pyttsx3==2.90
@@ -8,4 +8,4 @@ sounddevice==0.4.7
 scipy==1.13.0
 pillow==10.2.0
 pystray==0.19.5
-sv_ttk
+sv-ttk==2.6.0
