@@ -9,6 +9,8 @@ import globals
 from scipy.io.wavfile import read
 from queue import Queue
 from time import sleep
+import tempfile
+import os
 
 
 def get_tts_voices():
@@ -59,6 +61,11 @@ def stt_main(
 
     engine = init_tts_engine(output_device, voice_id, speech_rate, volume)
 
+    # Create temp file
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+    temp_file_path = temp_file.name
+    temp_file.close()  # Close the file so it can be reopened later
+
     # Cue the user that we're ready to go.
     print("Model loaded.")
     print("Listening...")
@@ -89,7 +96,7 @@ def stt_main(
                 text = result["text"].strip()
 
                 print(text)
-                play_tts(engine, text)
+                play_tts(engine, text, temp_file_path)
 
             else:
                 # Infinite loops are bad for processors, must sleep.
@@ -98,8 +105,9 @@ def stt_main(
             print(f"Error: {e}")
             break
 
-    print("Stopped STT-TTS")
+    cleanup_temp_file(temp_file_path)
     stop_listening()
+    print("Stopped STT-TTS")
 
 
 def get_output_devices():
@@ -129,12 +137,21 @@ def load_stt_model(model, english):
     return audio_model
 
 
-def play_tts(engine, text):
-    engine.save_to_file(text, "resources\\temp\\speech.wav")
+def play_tts(engine, text, temp_file_path):
+    # Overwrite the temporary file with new speech output
+    engine.save_to_file(text, temp_file_path)
     engine.runAndWait()
-    sample_rate, data = read("resources\\temp\\speech.wav")
+
+    # Read the audio data from the temporary file
+    sample_rate, data = read(temp_file_path)
+
+    # Play the audio data
     sd.play(data, sample_rate)
     sd.wait()
+
+
+def cleanup_temp_file(temp_file_path):
+    os.remove(temp_file_path)
 
 
 if __name__ == "__main__":

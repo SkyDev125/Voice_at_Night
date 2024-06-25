@@ -11,10 +11,38 @@ import speech_to_text as stt
 import threading
 import globals
 import sv_ttk
+import sys
+import os
+
+# Check if running in a PyInstaller context
+if getattr(sys, "frozen", False):
+    # Running in a PyInstaller context
+    try:
+        import pyi_splash # type: ignore
+
+        splash_loaded = True
+    except ImportError:
+        splash_loaded = False
+        print(
+            "pyi_splash module not found. Running without splash screen functionality."
+        )
+else:
+    # Running in a regular Python script context
+    splash_loaded = False
+
 
 # ==================================================
 # Helper Functions
 # ==================================================
+
+
+# Function to determine if running as a PyInstaller bundle
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    base_path = getattr(
+        sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__))
+    )
+    return os.path.join(base_path, relative_path)
 
 
 def find_key(d, value):
@@ -59,6 +87,7 @@ def stop():
     globals.stt_running = False
     if globals.stt_thread:
         globals.stt_thread.join()
+
 
 # ==================================================
 # Default config update functions
@@ -128,16 +157,14 @@ def show_window(icon, root):
 from tkinter import messagebox  # Import messagebox for the confirmation dialog
 
 
-def hide_window(root):
+def hide_window(root, icon_path):
     # Ask the user if they want to minimize to tray
     if messagebox.askyesno(
         "Minimize to Tray",
         "Do you want to minimize the application to the system tray?",
     ):
         root.withdraw()
-        image = Image.open(
-            "resources\\images\\icon.ico"
-        )  # Corrected the path for consistency
+        image = Image.open(icon_path)
         menu = (
             item("Quit", lambda: quit_app(icon, root)),
             item("Show", lambda: show_window(icon, root)),
@@ -163,8 +190,9 @@ def quit_app(icon, root):
 def create_UI():
     # Create the main window
     root = tk.Tk()
+    icon_path = resource_path("resources/images/icon.ico")
     root.title("TTS and STT Configuration Panel")
-    root.iconbitmap("resources\images\icon.ico")
+    root.iconbitmap(icon_path)
     sv_ttk.set_theme("dark")
 
     # Prevent the window from being resizable
@@ -306,7 +334,12 @@ def create_UI():
     save_defaults_button.grid(column=1, row=9, padx=(5, 10), pady=10)
 
     # Modify the application to minimize to system tray on close
-    root.protocol("WM_DELETE_WINDOW", lambda: hide_window(root))
+    root.protocol("WM_DELETE_WINDOW", lambda: hide_window(root, icon_path))
+
+    # Stop splash screen
+    if splash_loaded:
+        # Safe to use pyi_splash functions here
+        pyi_splash.close()
 
     # Run the application
     root.mainloop()

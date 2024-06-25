@@ -1,14 +1,12 @@
 numpy==1.26.4
 PyAudio==0.2.14
 SpeechRecognition==3.10.4
-git+https://github.com/openai/whisper.git
-
---extra-index-url https://download.pytorch.org/whl/cu118
+openai-whisper @ git+https://github.com/openai/whisper.git@ba3f3cd54b0e5b8ce1ab3de13e32122d0d5f98ab
 torch==2.1.2+cu118
-
 pyttsx3==2.90
 sounddevice==0.4.7
 scipy==1.13.0
 pillow==10.2.0
 pystray==0.19.5
 sv-ttk==2.6.0
+--extra-index-url https://download.pytorch.org/whl/cu118
