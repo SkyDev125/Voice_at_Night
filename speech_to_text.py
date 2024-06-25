@@ -5,6 +5,7 @@ import torch
 import pyttsx3
 import sounddevice as sd
 import globals
+import ui
 
 from scipy.io.wavfile import read
 from queue import Queue
@@ -28,6 +29,7 @@ def stt_main(
     energy_threshold,
     record_timeout,
     output_device,
+    log_area,
 ):
     # Thread safe Queue for passing data from the threaded recording callback.
     data_queue = Queue()
@@ -40,6 +42,8 @@ def stt_main(
 
     # Load / Download model
     audio_model = load_stt_model(model, english)
+
+    ui.log_message("Model loaded.", log_area, "INFO")
 
     with source:
         recorder.adjust_for_ambient_noise(source)
@@ -67,8 +71,7 @@ def stt_main(
     temp_file.close()  # Close the file so it can be reopened later
 
     # Cue the user that we're ready to go.
-    print("Model loaded.")
-    print("Listening...")
+    ui.log_message("Listening...", log_area, "INFO")
 
     while globals.stt_running:
         try:
@@ -95,19 +98,17 @@ def stt_main(
                 )
                 text = result["text"].strip()
 
-                print(text)
+                ui.log_message(text, log_area, "INFO")
                 play_tts(engine, text, temp_file_path)
 
             else:
-                # Infinite loops are bad for processors, must sleep.
-                sleep(0.25)
+                sleep(0.1)
         except Exception as e:
-            print(f"Error: {e}")
+            ui.log_message(f"Error: {e}", log_area, "ERROR")
             break
 
     cleanup_temp_file(temp_file_path)
     stop_listening()
-    print("Stopped STT-TTS")
 
 
 def get_output_devices():
