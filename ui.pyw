@@ -74,6 +74,7 @@ def start(
     output_devices,
     output_device_var,
     log_area,
+    faster_model_var,
 ):
     def stt_main_thread():
         stt.stt_main(
@@ -86,6 +87,7 @@ def start(
             record_timeout_var.get(),
             output_devices[output_device_var.get()],
             log_area,
+            faster_model_var.get(),
         )
 
     globals.stt_running = True
@@ -115,6 +117,7 @@ def save_as_default(
     record_timeout_var,
     output_devices,
     output_device_var,
+    faster_model_var,
 ):
     # Show a warning before saving defaults
     response = messagebox.askyesno(
@@ -131,6 +134,8 @@ def save_as_default(
         update_config_value(
             "output_device_id", output_devices[output_device_var.get()]
         )
+        update_config_value("faster_model", faster_model_var.get())
+        update_config_value("logging", globals.logs_visible)
         messagebox.showinfo(
             "Save Defaults", "Defaults have been saved successfully."
         )
@@ -263,6 +268,13 @@ def create_UI():
     )
     english_check.grid(column=0, row=4, sticky="ew")
 
+    # Faster Model Selection
+    faster_model_var = tk.BooleanVar(value=config.faster_model)
+    faster_model_check = ttk.Checkbutton(
+        root, text="Use Faster Model", variable=faster_model_var
+    )
+    faster_model_check.grid(column=1, row=4, sticky="ew")
+
     # Energy Threshold
     energy_threshold_label = ttk.Label(root, text="Energy Threshold:")
     energy_threshold_label.grid(column=0, row=5, sticky=tk.W)
@@ -293,7 +305,9 @@ def create_UI():
     # Create the log area
     log_area = scrolledtext.ScrolledText(root, state="disabled", height=10)
     log_area.grid(column=0, row=10, columnspan=3, sticky="ew", pady=10)
-    log_area.grid_remove()
+    if not config.logging:
+        globals.logs_visible = False
+        log_area.grid_remove()
     log_area.configure(font="TkFixedFont")
     log_area.tag_config("INFO", foreground="#add8e6")
     log_area.tag_config("WARNING", foreground="#fbd5a6")
@@ -315,6 +329,7 @@ def create_UI():
         output_devices,
         output_device_var,
         log_area,
+        faster_model_var,
     )
 
     # Modify the application to minimize to system tray on close
@@ -342,6 +357,7 @@ def CreateButtons(
     output_devices,
     output_device_var,
     log_area,
+    faster_model_var,
 ):
     buttons_frame = tk.Frame(root)
     buttons_frame.grid(row=9, column=0, columnspan=3, pady=10, sticky="ew")
@@ -363,6 +379,7 @@ def CreateButtons(
                 output_devices,
                 output_device_var,
                 log_area,
+                faster_model_var,
             )
             status_button.config(text="Stop", style="On.TButton")
         else:
@@ -388,6 +405,7 @@ def CreateButtons(
             record_timeout_var,
             output_devices,
             output_device_var,
+            faster_model_var,
         ),
     )
     # Adjusted to be in the center-right position with padding for spacing

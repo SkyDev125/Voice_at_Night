@@ -1,17 +1,21 @@
 import numpy as np
 import speech_recognition as sr
-import whisper
-import torch
 import pyttsx3
 import sounddevice as sd
 import globals
-import ui
-
+import ui  # type: ignore
 from scipy.io.wavfile import read
 from queue import Queue
 from time import sleep
 import tempfile
 import os
+
+# Faster model
+from faster_whisper import WhisperModel
+
+# Old Model
+import whisper
+import torch
 
 
 def get_tts_voices():
@@ -30,6 +34,7 @@ def stt_main(
     record_timeout,
     output_device,
     log_area,
+    faster_model,
 ):
     # Thread safe Queue for passing data from the threaded recording callback.
     data_queue = Queue()
@@ -41,8 +46,8 @@ def stt_main(
     source = sr.Microphone(sample_rate=16000)
 
     # Load / Download model
-    audio_model = load_stt_model(model, english)
-
+    ui.log_message("Loading Model...", log_area, "INFO")
+    audio_model = load_stt_model(model, english, faster_model)
     ui.log_message("Model loaded.", log_area, "INFO")
 
     with source:
@@ -73,39 +78,77 @@ def stt_main(
     # Cue the user that we're ready to go.
     ui.log_message("Listening...", log_area, "INFO")
 
-    while globals.stt_running:
-        try:
-            # Pull raw recorded audio from the queue.
-            if not data_queue.empty():
+    if faster_model:
+        while globals.stt_running:
+            try:
+                # Pull raw recorded audio from the queue.
+                if not data_queue.empty():
 
-                # Combine audio data from queue
-                audio_data = b"".join(data_queue.queue)
-                data_queue.queue.clear()
+                    # Combine audio data from queue
+                    audio_data = b"".join(data_queue.queue)
+                    data_queue.queue.clear()
 
-                # Convert in-ram buffer to something the model can use directly without needing a temp file.
-                # Convert data from 16 bit wide integers to floating point with a width of 32 bits.
-                # Clamp the audio stream frequency to a PCM wavelength compatible default of 32768hz max.
-                audio_np = (
-                    np.frombuffer(audio_data, dtype=np.int16).astype(
-                        np.float32
+                    # Convert in-ram buffer to something the model can use directly without needing a temp file.
+                    # Convert data from 16 bit wide integers to floating point with a width of 32 bits.
+                    # Clamp the audio stream frequency to a PCM wavelength compatible default of 32768hz max.
+                    audio_np = (
+                        np.frombuffer(audio_data, dtype=np.int16).astype(
+                            np.float32
+                        )
+                        / 32768.0
                     )
-                    / 32768.0
-                )
 
-                # Transcribe the audio.
-                result = audio_model.transcribe(
-                    audio_np, fp16=torch.cuda.is_available()
-                )
-                text = result["text"].strip()
+                    # Transcribe the audio.
+                    result, _ = audio_model.transcribe(audio_np)
+                    text = ""
+                    for segment in result:
+                        text += segment.text
 
-                ui.log_message(text, log_area, "INFO")
-                play_tts(engine, text, temp_file_path)
+                    text = text.strip()
 
-            else:
-                sleep(0.1)
-        except Exception as e:
-            ui.log_message(f"Error: {e}", log_area, "ERROR")
-            break
+                    ui.log_message(text, log_area, "INFO")
+                    play_tts(engine, text, temp_file_path)
+
+                else:
+                    sleep(0.1)
+            except Exception as e:
+                ui.log_message(f"Error: {e}", log_area, "ERROR")
+                break
+    else:
+        while globals.stt_running:
+            try:
+                # Pull raw recorded audio from the queue.
+                if not data_queue.empty():
+
+                    # Combine audio data from queue
+                    audio_data = b"".join(data_queue.queue)
+                    data_queue.queue.clear()
+
+                    # Convert in-ram buffer to something the model can use directly without needing a temp file.
+                    # Convert data from 16 bit wide integers to floating point with a width of 32 bits.
+                    # Clamp the audio stream frequency to a PCM wavelength compatible default of 32768hz max.
+                    audio_np = (
+                        np.frombuffer(audio_data, dtype=np.int16).astype(
+                            np.float32
+                        )
+                        / 32768.0
+                    )
+
+                    # Transcribe the audio.
+                    result = audio_model.transcribe(
+                        audio_np, fp16=torch.cuda.is_available()
+                    )
+
+                    text = result["text"].strip()
+
+                    ui.log_message(text, log_area, "INFO")
+                    play_tts(engine, text, temp_file_path)
+
+                else:
+                    sleep(0.1)
+            except Exception as e:
+                ui.log_message(f"Error: {e}", log_area, "ERROR")
+                break
 
     cleanup_temp_file(temp_file_path)
     stop_listening()
@@ -131,10 +174,15 @@ def init_tts_engine(output_device, voice_id, speech_rate, volume):
     return engine
 
 
-def load_stt_model(model, english):
+def load_stt_model(model, english, faster_model):
     if model != "large" and english:
         model = model + ".en"
-    audio_model = whisper.load_model(model)
+
+    if faster_model:
+        audio_model = WhisperModel(model)
+    else:
+        audio_model = whisper.load_model(model)
+
     return audio_model
 
 

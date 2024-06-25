@@ -7,3 +7,5 @@ energy_threshold = 1000
 record_timeout = 2
 phrase_timeout = 3
 output_device_id = 8
+faster_model = True
+logging = False
