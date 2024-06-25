@@ -8,7 +8,7 @@ datas += copy_metadata('openai-whisper', recursive=True)
 
 
 a = Analysis(
-    ['ui.py'],
+    ['ui.pyw'],
     pathex=[],
     binaries=[],
     datas=datas,
