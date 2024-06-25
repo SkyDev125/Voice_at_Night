@@ -162,4 +162,4 @@ cython_debug/
 #.idea/
 
 # Temp Folder
-resources/
+resources/temp/
